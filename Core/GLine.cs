@@ -1,4 +1,4 @@
-﻿// Copyright 2004-2017 The Poderosa Project.
+﻿// Copyright 2004-2018 The Poderosa Project.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,570 +13,25 @@
 // limitations under the License.
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Diagnostics;
-using System.Text;
+
 
 #if UNITTEST
 using NUnit.Framework;
 #endif
 
+using Poderosa.Document.Internal;
 using Poderosa.Util.Drawing;
-using Poderosa.Forms;
 using Poderosa.View;
 
 namespace Poderosa.Document {
-
-    /// <summary>
-    /// Flag bits for <see cref="GChar"/>.
-    /// </summary>
-    [Flags]
-    internal enum GCharFlags : uint {
-        None = 0u,
-        RightHalf = 1u << 29,
-        CJK = UnicodeCharFlags.CJK,
-        WideWidth = UnicodeCharFlags.WideWidth,
-    }
-
-    /// <summary>
-    /// Character information in <see cref="GLine"/>.
-    /// </summary>
-    internal struct GChar {
-        // bit 0..20 : Unicode Code Point (copied from UnicodeChar)
-        //
-        // bit 29 : Right half of a wide-width character
-        // bit 30 : CJK (copied from UnicodeChar)
-        // bit 31 : wide width (copied from UnicodeChar)
-
-        private readonly uint _bits;
-
-        private const uint CodePointMask = 0x1fffffu;
-        private const uint UnicodeCharMask = CodePointMask | (uint)(UnicodeCharFlags.WideWidth | UnicodeCharFlags.CJK);
-
-        /// <summary>
-        /// An instance of SPACE (U+0020)
-        /// </summary>
-        public static GChar ASCII_SPACE {
-            get {
-                // The cost of the constructor would be zero with JIT compiler enabling optimization.
-                return new GChar(UnicodeChar.ASCII_SPACE);
-            }
-        }
-
-        /// <summary>
-        /// An instance of NUL (U+0000)
-        /// </summary>
-        public static GChar ASCII_NUL {
-            get {
-                // The cost of the constructor would be zero with JIT compiler enabling optimization.
-                return new GChar(UnicodeChar.ASCII_NUL);
-            }
-        }
-
-        /// <summary>
-        /// Unicode code point
-        /// </summary>
-        public uint CodePoint {
-            get {
-                return _bits & CodePointMask;
-            }
-        }
-
-        /// <summary>
-        /// Whether this object represents a CJK character.
-        /// </summary>
-        public bool IsCJK {
-            get {
-                return (_bits & (uint)GCharFlags.CJK) != 0u;
-            }
-        }
-
-        /// <summary>
-        /// Whether this object represents a wide-width character.
-        /// </summary>
-        public bool IsWideWidth {
-            get {
-                return (_bits & (uint)GCharFlags.WideWidth) != 0u;
-            }
-        }
-
-        /// <summary>
-        /// Whether this object represents right-half of a wide-width character.
-        /// </summary>
-        public bool IsRightHalf {
-            get {
-                const uint mask = (uint)(GCharFlags.WideWidth | GCharFlags.RightHalf);
-                return (_bits & mask) == mask;
-            }
-        }
-
-        /// <summary>
-        /// Whether this object represents left-half of a wide-width character.
-        /// </summary>
-        public bool IsLeftHalf {
-            get {
-                const uint mask = (uint)(GCharFlags.WideWidth | GCharFlags.RightHalf);
-                return (_bits & mask) == (uint)GCharFlags.WideWidth;
-            }
-        }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="ch">Unicode character</param>
-        public GChar(UnicodeChar ch) {
-            this._bits = ch.RawData & UnicodeCharMask;
-        }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="bits">raw bits</param>
-        private GChar(uint bits) {
-            this._bits = bits;
-        }
-
-        /// <summary>
-        /// Copy character into the char array in UTF-16.
-        /// </summary>
-        /// <param name="seq">destination array</param>
-        /// <param name="index">start index of the array</param>
-        /// <returns>char count written</returns>
-        public int WriteTo(char[] seq, int index) {
-            return Unicode.WriteCodePointTo(this._bits & CodePointMask, seq, index);
-        }
-
-        /// <summary>
-        /// Adds flags.
-        /// </summary>
-        /// <param name="ch">object to be based on</param>
-        /// <param name="flags">flags to add</param>
-        /// <returns>new object</returns>
-        public static GChar operator +(GChar ch, GCharFlags flags) {
-            return new GChar(ch._bits | (uint)flags);
-        }
-    }
-
-    /// <summary>
-    /// Flag bits for <see cref="GAttr"/>.
-    /// </summary>
-    [Flags]
-    internal enum GAttrFlags : uint {
-        None = 0u,
-        Blink = 1u << 19,
-        Hidden = 1u << 20,
-        Underlined = 1u << 21,
-        Bold = 1u << 22,
-        UseCjkFont = 1u << 23,
-        Cursor = 1u << 24,
-        Selected = 1u << 25,
-        Inverted = 1u << 26,
-        Use24bitForeColor = 1u << 27,
-        Use24bitBackColor = 1u << 28,
-        Use8bitForeColor = 1u << 29,
-        Use8bitBackColor = 1u << 30,
-        SameToPrevious = 1u << 31,
-    }
-
-    /// <summary>
-    /// Attribute information in <see cref="GLine"/>.
-    /// </summary>
-    /// <remarks>
-    /// This object doesn't contain 24 bit colors.<br/>
-    /// 24 bit colors are maintained by array of <see cref="GColor24"/>.
-    /// </remarks>
-    internal struct GAttr {
-        // bit 0..7  : 8 bit fore color code
-        // bit 8..16 : 8 bit back color code
-        //
-        // bit 19 : blink
-        // bit 20 : hidden
-        // bit 21 : underlined
-        // bit 22 : bold
-        // bit 23 : use cjk font
-        // bit 24 : cursor
-        // bit 25 : selected
-        // bit 26 : inverted
-        // bit 27 : use 24 bit fore color
-        // bit 28 : use 24 bit back color
-        // bit 29 : use 8 bit fore color
-        // bit 30 : use 8 bit back color
-        // bit 31 : marker to tell that this cell has the same flags/colors to previous cell.
-
-        private readonly uint _bits;
-
-        /// <summary>
-        /// Default value
-        /// </summary>
-        public static GAttr Default {
-            get {
-                return new GAttr(); // all bits must be zero
-            }
-        }
-
-        /// <summary>
-        /// Back color (8 bit color code)
-        /// </summary>
-        public int BackColor {
-            get {
-                return (int)((this._bits >> 8) & 0xffu);
-            }
-        }
-
-        /// <summary>
-        /// Fore color (8 bit color code)
-        /// </summary>
-        public int ForeColor {
-            get {
-                return (int)(this._bits & 0xffu);
-            }
-        }
-
-        /// <summary>
-        /// Whether this GAttr uses 24 bit colors.
-        /// </summary>
-        public bool Uses24bitColor {
-            get {
-                return (this._bits & (uint)(GAttrFlags.Use24bitBackColor | GAttrFlags.Use24bitForeColor)) != 0u;
-            }
-        }
-
-        /// <summary>
-        /// Whether this GAttr represents the default settings.
-        /// </summary>
-        public bool IsDefault {
-            get {
-                return this.CoreBits == GAttr.Default.CoreBits;
-            }
-        }
-
-        /// <summary>
-        /// Intenal bits without "SameToPrevious" bit.
-        /// </summary>
-        private uint CoreBits {
-            get {
-                return this._bits & ~(uint)GAttrFlags.SameToPrevious;
-            }
-        }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="backColor">back color (8 bit color code)</param>
-        /// <param name="foreColor">fore color (8 bit color code)</param>
-        /// <param name="flags">flags</param>
-        public GAttr(int backColor, int foreColor, GAttrFlags flags) {
-            uint flagBits = (uint)flags;
-            uint bits = flagBits & ~0xffffu;
-            if ((flagBits & (uint)GAttrFlags.Use8bitForeColor) != 0u) {
-                bits |= (uint)(foreColor & 0xff);
-            }
-            if ((flagBits & (uint)GAttrFlags.Use8bitBackColor) != 0u) {
-                bits |= (uint)((backColor & 0xff) << 8);
-            }
-            this._bits = bits;
-        }
-
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="bits">raw bits</param>
-        private GAttr(uint bits) {
-            this._bits = bits;
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use default fore color.
-        /// </summary>
-        /// <returns>a new value</returns>
-        public GAttr CopyWithDefaultForeColor() {
-            return new GAttr(this._bits & ~(0xffu | (uint)GAttrFlags.Use8bitForeColor | (uint)GAttrFlags.Use24bitForeColor));
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use 8 bit fore color.
-        /// </summary>
-        /// <param name="color">8 bit color code</param>
-        /// <returns>a new value</returns>
-        public GAttr CopyWith8bitForeColor(int color) {
-            return new GAttr(
-                        (this._bits & ~(0xffu | (uint)GAttrFlags.Use8bitForeColor | (uint)GAttrFlags.Use24bitForeColor))
-                        | (uint)(color & 0xff)
-                        | (uint)GAttrFlags.Use8bitForeColor);
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use 24 bit fore color.
-        /// </summary>
-        /// <returns>a new value</returns>
-        public GAttr CopyWith24bitForeColor() {
-            return new GAttr(
-                        (this._bits & ~(0xffu | (uint)GAttrFlags.Use8bitForeColor | (uint)GAttrFlags.Use24bitForeColor))
-                        | (uint)GAttrFlags.Use24bitForeColor);
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use default back color.
-        /// </summary>
-        /// <returns>a new value</returns>
-        public GAttr CopyWithDefaultBackColor() {
-            return new GAttr(this._bits & ~(0xff00u | (uint)GAttrFlags.Use8bitBackColor | (uint)GAttrFlags.Use24bitBackColor));
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use 8 bit back color.
-        /// </summary>
-        /// <param name="color">8 bit color code</param>
-        /// <returns>a new value</returns>
-        public GAttr CopyWith8bitBackColor(int color) {
-            return new GAttr(
-                        (this._bits & ~(0xff00u | (uint)GAttrFlags.Use8bitBackColor | (uint)GAttrFlags.Use24bitBackColor))
-                        | ((uint)(color & 0xff) << 8)
-                        | (uint)GAttrFlags.Use8bitBackColor);
-        }
-
-        /// <summary>
-        /// Gets a new value that is specified to use 24 bit back color.
-        /// </summary>
-        /// <returns>a new value</returns>
-        public GAttr CopyWith24bitBackColor() {
-            return new GAttr(
-                        (this._bits & ~(0xff00u | (uint)GAttrFlags.Use8bitBackColor | (uint)GAttrFlags.Use24bitBackColor))
-                        | (uint)GAttrFlags.Use24bitBackColor);
-        }
-
-        /// <summary>
-        /// Checks if one or more of the specified flags were set.
-        /// </summary>
-        /// <param name="flags"></param>
-        /// <returns>true if one or more of the specified flags were set.</returns>
-        public bool Has(GAttrFlags flags) {
-            return (this._bits & (uint)flags) != 0u;
-        }
-
-        /// <summary>
-        /// Adds flags.
-        /// </summary>
-        /// <param name="attr">object to be based on</param>
-        /// <param name="flags">flags to set</param>
-        /// <returns>new object</returns>
-        public static GAttr operator +(GAttr attr, GAttrFlags flags) {
-            return new GAttr(attr._bits | (uint)flags);
-        }
-
-        /// <summary>
-        /// Removes flags.
-        /// </summary>
-        /// <param name="attr">object to be based on</param>
-        /// <param name="flags">flags to remove</param>
-        /// <returns>new object</returns>
-        public static GAttr operator -(GAttr attr, GAttrFlags flags) {
-            return new GAttr(attr._bits & ~(uint)flags);
-        }
-
-        /// <summary>
-        /// Equality operator
-        /// </summary>
-        /// <param name="attr1"></param>
-        /// <param name="attr2"></param>
-        /// <returns></returns>
-        public static bool operator ==(GAttr attr1, GAttr attr2) {
-            return attr1.CoreBits == attr2.CoreBits;
-        }
-
-        /// <summary>
-        /// Non-equality operator
-        /// </summary>
-        /// <param name="attr1"></param>
-        /// <param name="attr2"></param>
-        /// <returns></returns>
-        public static bool operator !=(GAttr attr1, GAttr attr2) {
-            return !(attr1 == attr2);
-        }
-
-        public override bool Equals(object obj) {
-            if (obj is GAttr) {
-                return this == (GAttr)obj;
-            }
-            return false;
-        }
-
-        public override int GetHashCode() {
-            return (int)this.CoreBits;
-        }
-    }
-
-    /// <summary>
-    /// Cell of <see cref="GLine"/>.
-    /// </summary>
-    internal struct GCell {
-        public GChar Char;
-        public GAttr Attr;
-
-        public GCell(GChar ch, GAttr attr) {
-            Char = ch;
-            Attr = attr;
-        }
-
-        public void Set(GChar ch, GAttr attr) {
-            // this method can assign members faster comparing to the following methods.
-            // 1:
-            //   array[i].Char = ch;
-            //   array[i].Attr = attr;  // need realoding of the address of array[i]
-            // 2:
-            //   array[i] = new GCell(ch, attr); // need copying temporary 8 bytes.
-
-            Char = ch;
-            Attr = attr;
-        }
-
-        public void SetNul() {
-            Char = GChar.ASCII_NUL;
-            Attr -= GAttrFlags.UseCjkFont;
-        }
-    }
-
-    /// <summary>
-    /// Extension methods for <see cref="GCell"/> array.
-    /// </summary>
-    internal static class GCellArrayMixin {
-
-        /// <summary>
-        /// Copy <see cref="GCell"/>s to another array.
-        /// </summary>
-        /// <param name="srcArray">source array</param>
-        /// <param name="dstArray">destination array</param>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public static void CopyTo(this GCell[] srcArray, GCell[] dstArray) {
-            for (int i = 0; i < srcArray.Length; i++) {
-                dstArray[i] = srcArray[i];
-            }
-        }
-
-        /// <summary>
-        /// Fill <see cref="GCell"/>s with the specified value.
-        /// </summary>
-        /// <param name="dstArray">destination array</param>
-        /// <param name="offsetStart">start offset of the range (inclusive)</param>
-        /// <param name="offsetEnd">end offset of the range (exclusive)</param>
-        /// <param name="fillChar"><see cref="GChar"/> value to fill</param>
-        /// <param name="fillAttr"><see cref="GAttr"/> value to fill</param>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public static void Fill(this GCell[] dstArray, int offsetStart, int offsetEnd, GChar fillChar, GAttr fillAttr) {
-            for (int i = offsetStart; i < offsetEnd; i++) {
-                dstArray[i].Set(fillChar, fillAttr);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 24 bit color information in <see cref="GLine"/>.
-    /// </summary>
-    internal struct GColor24 {
-        // bit 0 ..7  : B
-        // bit 8 ..15 : G
-        // bit 16..23 : R
-        private uint _foreColor;
-        private uint _backColor;
-
-        /// <summary>
-        /// 24 bit fore color
-        /// </summary>
-        public Color ForeColor {
-            get {
-                return Color.FromArgb((int)(_foreColor | 0xff000000u));
-            }
-            set {
-                _foreColor = (uint)(value.ToArgb() & 0xffffff);
-            }
-        }
-
-        /// <summary>
-        /// 24 bit back color
-        /// </summary>
-        public Color BackColor {
-            get {
-                return Color.FromArgb((int)(_backColor | 0xff000000u));
-            }
-            set {
-                _backColor = (uint)(value.ToArgb() & 0xffffff);
-            }
-        }
-
-        /// <summary>
-        /// Equality operator
-        /// </summary>
-        /// <param name="col1"></param>
-        /// <param name="col2"></param>
-        /// <returns></returns>
-        public static bool operator ==(GColor24 col1, GColor24 col2) {
-            return col1._foreColor == col2._foreColor && col1._backColor == col2._backColor;
-        }
-
-        /// <summary>
-        /// Non-equality operator
-        /// </summary>
-        /// <param name="col1"></param>
-        /// <param name="col2"></param>
-        /// <returns></returns>
-        public static bool operator !=(GColor24 col1, GColor24 col2) {
-            return !(col1 == col2);
-        }
-
-        public override bool Equals(object obj) {
-            if (obj is GColor24) {
-                return this == ((GColor24)obj);
-            }
-            return false;
-        }
-
-        public override int GetHashCode() {
-            return (int)(this._foreColor + this._backColor);
-        }
-    }
-
-    /// <summary>
-    /// Extension methods for <see cref="GColor24"/> array.
-    /// </summary>
-    internal static class GColor24ArrayMixin {
-
-        /// <summary>
-        /// Copy <see cref="GColor24"/>s to another array.
-        /// </summary>
-        /// <param name="srcArray">source array</param>
-        /// <param name="dstArray">destination array</param>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public static void CopyTo(this GColor24[] srcArray, GColor24[] dstArray) {
-            for (int i = 0; i < srcArray.Length; i++) {
-                dstArray[i] = srcArray[i];
-            }
-        }
-
-        /// <summary>
-        /// Fill <see cref="GColor24"/>s with the specified value.
-        /// </summary>
-        /// <param name="dstArray">destination array</param>
-        /// <param name="offsetStart">start offset of the range (inclusive)</param>
-        /// <param name="offsetEnd">end offset of the range (exclusive)</param>
-        /// <param name="fillValue"><see cref="GColor24"/> value to fill</param>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public static void Fill(this GColor24[] dstArray, int offsetStart, int offsetEnd, GColor24 fillValue) {
-            for (int i = offsetStart; i < offsetEnd; i++) {
-                dstArray[i] = fillValue;
-            }
-        }
-    }
 
     /// <summary>
     /// Represents a single line.
     /// </summary>
     public sealed class GLine {
 
-        // Note:
-        //  If 24 bit colors are not used in this line, GColor24 array can be null for reducing memory usage.
-        //
         // Note:
         //  GCell array may contains GChar.ASCII_NUL.
         //  In rendering or conversion to the text, trailing GChar.ASCII_NULs are ignored, and
@@ -589,8 +44,7 @@ namespace Poderosa.Document {
         /// <param name="length">Number of characters to copy from buff.</param>
         public delegate void BufferWriter(char[] buff, int length);
 
-        private GCell[] _cell;
-        private GColor24[] _color24;    // can be null if 24 bit colors are not used
+        private readonly CompactGCellArray _cell;
         private int _displayLength;
         private EOLType _eolType;
         private int _id;
@@ -678,8 +132,7 @@ namespace Poderosa.Document {
         /// <param name="length"></param>
         public GLine(int length) {
             Debug.Assert(length > 0);
-            _cell = new GCell[length];  // no need to fill. (initialized as NULs with the default attribute)
-            _color24 = null;    // 24 bit colors are not used
+            _cell = new CompactGCellArray(length, false);
             _displayLength = 0;
             _id = -1;
         }
@@ -688,43 +141,35 @@ namespace Poderosa.Document {
         /// Constructor
         /// </summary>
         /// <param name="cell">cell data</param>
-        /// <param name="color24">24 bit colors</param>
         /// <param name="displayLength">length of the content</param>
         /// <param name="eolType">type of the line ending</param>
-        internal GLine(GCell[] cell, GColor24[] color24, int displayLength, EOLType eolType) {
+        internal GLine(CompactGCellArray cell, int displayLength, EOLType eolType) {
             _cell = cell;
-            _color24 = color24;
             _displayLength = displayLength;
             _eolType = eolType;
             _id = -1;
         }
 
         /// <summary>
+        /// Constructor (for Clone())
+        /// </summary>
+        /// <param name="orig"></param>
+        private GLine(GLine orig) {
+            _cell = orig._cell.Clone();
+            _displayLength = orig._displayLength;
+            _eolType = orig._eolType;
+            _id = orig._id;
+        }
+
+        /// <summary>
         /// Updates content in this line.
         /// </summary>
-        /// <param name="cell">cell data to be copied</param>
-        /// <param name="color24">24 bit colors to be copied, or null</param>
+        /// <param name="cells">cell data to be copied</param>
         /// <param name="displayLength">length of the content</param>
         /// <param name="eolType">type of the line ending</param>
-        internal void UpdateContent(GCell[] cell, GColor24[] color24, int displayLength, EOLType eolType) {
+        internal void UpdateContent(IGCellArraySource cells, int displayLength, EOLType eolType) {
             lock (this) {
-                if (_cell.Length == cell.Length) {
-                    cell.CopyTo(_cell);
-                }
-                else {
-                    _cell = (GCell[])cell.Clone();
-                }
-
-                if (color24 == null) {
-                    _color24 = null;
-                }
-                else if (_color24 != null && _color24.Length == color24.Length) {
-                    color24.CopyTo(_color24);
-                }
-                else {
-                    _color24 = (GColor24[])color24.Clone();
-                }
-
+                _cell.Reset(cells);
                 _displayLength = displayLength;
                 _eolType = eolType;
             }
@@ -736,7 +181,7 @@ namespace Poderosa.Document {
         /// <param name="line">another instance</param>
         public void CopyFrom(GLine line) {
             lock (this) {
-                this.UpdateContent(line._cell, line._color24, line._displayLength, line._eolType);
+                this.UpdateContent(line._cell, line._displayLength, line._eolType);
                 this._id = line._id;
             }
         }
@@ -747,81 +192,16 @@ namespace Poderosa.Document {
         /// <returns>cloned instance</returns>
         public GLine Clone() {
             lock (this) {
-                GLine nl = new GLine(
-                            (GCell[])_cell.Clone(),
-                            (_color24 != null) ? (GColor24[])_color24.Clone() : null,
-                            _displayLength,
-                            _eolType);
-                nl._id = _id;
-                return nl;
+                return new GLine(this);
             }
         }
 
         /// <summary>
-        /// Duplicates internal buffer.
+        /// Reset the specified cell array with the content in this instance.
         /// </summary>
-        /// <param name="reusableCellArray">reusable array, or null</param>
-        /// <param name="reusableColorArray">reusable array, or null</param>
-        /// <param name="cellArray">
-        /// if <paramref name="reusableCellArray"/> is available for storing cells, <paramref name="reusableCellArray"/> with copied cell data will be returned.
-        /// otherwise, cloned cell data array will be returned.
-        /// </param>
-        /// <param name="colorArray">
-        /// if <paramref name="reusableColorArray"/> is available for storing cells, <paramref name="reusableColorArray"/> with copied color data will be returned.
-        /// otherwise, cloned color data array will be returned.
-        /// </param>
-        internal void DuplicateBuffers(GCell[] reusableCellArray, GColor24[] reusableColorArray, out GCell[] cellArray, out GColor24[] colorArray) {
+        internal void ResetGCellArray(IGCellArray cells) {
             lock (this) {
-                cellArray = DuplicateCells(reusableCellArray);
-                colorArray = Duplicate24bitColors(reusableColorArray);
-            }
-        }
-
-        /// <summary>
-        /// Duplicates internal cell data.
-        /// </summary>
-        /// <param name="reusable">reusable array, or null</param>
-        /// <returns>
-        /// if the reusable array is available for storing data, the reusable array with copied cell data will be returned.
-        /// otherwise, cloned cell data array will be returned.
-        /// </returns>
-        private GCell[] DuplicateCells(GCell[] reusable) {
-            if (reusable != null && reusable.Length == _cell.Length) {
-                _cell.CopyTo(reusable);
-                return reusable;
-            }
-            else {
-                return (GCell[])_cell.Clone();
-            }
-        }
-
-        /// <summary>
-        /// Duplicates internal 24 bit color data.
-        /// </summary>
-        /// <param name="reusable">reusable array, or null</param>
-        /// <returns>
-        /// if the reusable array is available for storing data, the reusable array with copied color data will be returned.
-        /// otherwise, cloned color data array will be returned.
-        /// </returns>
-        private GColor24[] Duplicate24bitColors(GColor24[] reusable) {
-            if (_color24 == null) {
-                if (reusable != null && reusable.Length == _cell.Length) {
-                    // clear
-                    reusable.Fill(0, reusable.Length, new GColor24());
-                    return reusable;
-                }
-                else {
-                    return new GColor24[_cell.Length];
-                }
-            }
-            else {
-                if (reusable != null && reusable.Length == _color24.Length) {
-                    _color24.CopyTo(reusable);
-                    return reusable;
-                }
-                else {
-                    return (GColor24[])_color24.Clone();
-                }
+                cells.Reset(_cell);
             }
         }
 
@@ -841,40 +221,28 @@ namespace Poderosa.Document {
             GColor24 color = dec.Color24;
 
             lock (this) {
-                Fill(0, _cell.Length, GChar.ASCII_NUL, attr, color);
+                FillWithNul(0, _cell.Length, attr, color);
                 _displayLength = attr.IsDefault ? 0 : _cell.Length;
             }
         }
 
         /// <summary>
-        /// Fill range with the specified character and attributes.
+        /// Fill range with ASCII_NUL and the specified attributes.
         /// </summary>
         /// <param name="start">start index of the range (inclusive)</param>
         /// <param name="end">end index of the range (exclusive)</param>
-        /// <param name="ch">character to fill cells</param>
         /// <param name="attr">attributes to fill cells</param>
         /// <param name="color">24 bit colors to fill cells</param>
-        private void Fill(int start, int end, GChar ch, GAttr attr, GColor24 color) {
-            bool uses24bitColor = attr.Uses24bitColor;
-            if (uses24bitColor && _color24 == null) {
-                _color24 = new GColor24[_cell.Length];
-            }
-
-            GCell fillCell = new GCell(ch, attr + GAttrFlags.SameToPrevious);
+        private void FillWithNul(int start, int end, GAttr attr, GColor24 color) {
+            GAttr fillAttr = attr + GAttrFlags.SameToPrevious;
 
             if (start < end) {
-                _cell[start] = fillCell;
-                if (uses24bitColor) {
-                    _color24[start] = color;
-                }
+                _cell.SetNul(start, fillAttr, color);
                 UpdateSameToPrevious(start);
             }
 
             for (int i = start + 1; i < end; i++) {
-                _cell[i] = fillCell;
-                if (uses24bitColor) {
-                    _color24[i] = color;
-                }
+                _cell.SetNul(i, fillAttr, color);
             }
 
             UpdateSameToPrevious(end);
@@ -887,11 +255,11 @@ namespace Poderosa.Document {
         private void UpdateSameToPrevious(int index) {
             if (index > 0) {    // most common case
                 if (index < _cell.Length) {
-                    if (_cell[index - 1].Attr == _cell[index].Attr && (_color24 == null || _color24[index - 1] == _color24[index])) {
-                        _cell[index].Attr += GAttrFlags.SameToPrevious;
+                    if (_cell.AttrAt(index - 1) == _cell.AttrAt(index) && (_cell.Color24At(index - 1) == _cell.Color24At(index))) {
+                        _cell.SetFlags(index, GAttrFlags.SameToPrevious);
                     }
                     else {
-                        _cell[index].Attr -= GAttrFlags.SameToPrevious;
+                        _cell.ClearFlags(index, GAttrFlags.SameToPrevious);
                     }
                 }
 
@@ -899,7 +267,7 @@ namespace Poderosa.Document {
             }
 
             if (index == 0 && _cell.Length > 0) {
-                _cell[index].Attr -= GAttrFlags.SameToPrevious;
+                _cell.ClearFlags(index, GAttrFlags.SameToPrevious);
             }
         }
 
@@ -929,16 +297,16 @@ namespace Poderosa.Document {
                     return;
                 }
 
-                byte v = ToCharTypeForWordBreak(_cell[pos].Char);
+                byte v = ToCharTypeForWordBreak(_cell.CharAt(pos));
 
                 int index = pos - 1;
-                while (index >= 0 && ToCharTypeForWordBreak(_cell[index].Char) == v) {
+                while (index >= 0 && ToCharTypeForWordBreak(_cell.CharAt(index)) == v) {
                     index--;
                 }
                 start = index + 1;
 
                 index = pos + 1;
-                while (index < _cell.Length && ToCharTypeForWordBreak(_cell[index].Char) == v) {
+                while (index < _cell.Length && ToCharTypeForWordBreak(_cell.CharAt(index)) == v) {
                     index++;
                 }
                 end = index;
@@ -972,18 +340,11 @@ namespace Poderosa.Document {
                     return;
                 }
 
-                GCell[] oldBuff = _cell;
-                GCell[] newBuff = new GCell[length];
-                oldBuff.CopyTo(newBuff);
-                _cell = newBuff;
+                int oldLength = _cell.Length;
 
-                if (_color24 != null) {
-                    GColor24[] newColors = new GColor24[length];
-                    _color24.CopyTo(newColors);
-                    _color24 = newColors;
-                }
+                _cell.Expand(length, false);
 
-                Fill(oldBuff.Length, newBuff.Length, GChar.ASCII_NUL, GAttr.Default, new GColor24());
+                FillWithNul(oldLength, length, GAttr.Default, new GColor24());
                 // Note: _displayLength is not changed.
             }
         }
@@ -994,7 +355,7 @@ namespace Poderosa.Document {
         public bool IsPeriodicRedrawRequired() {
             lock (this) {
                 for (int i = 0; i < _cell.Length; i++) {
-                    if (_cell[i].Attr.Has(GAttrFlags.Blink)) {
+                    if (_cell.AttrAt(i).Has(GAttrFlags.Blink)) {
                         return true;
                     }
                 }
@@ -1032,12 +393,12 @@ namespace Poderosa.Document {
 
                 while (cellStart < _displayLength) {
                     int cellEnd = cellStart + 1;
-                    while (cellEnd < _displayLength && _cell[cellEnd].Attr.Has(GAttrFlags.SameToPrevious)) {
+                    while (cellEnd < _displayLength && _cell.AttrAt(cellEnd).Has(GAttrFlags.SameToPrevious)) {
                         cellEnd++;
                     }
 
-                    GAttr attr = _cell[cellStart].Attr;
-                    GColor24 color24 = (_color24 != null) ? _color24[cellStart] : new GColor24();
+                    GAttr attr = _cell.AttrAt(cellStart);
+                    GColor24 color24 = _cell.Color24At(cellStart);
 
                     IntPtr hFont = prof.CalcHFONT_NoUnderline(attr);
                     Win32.SelectObject(hdc, hFont);
@@ -1073,7 +434,7 @@ namespace Poderosa.Document {
                             // If background fill is required, we call ExtTextOut() with ETO_OPAQUE to draw the first character.
                             Win32.RECT rect = new Win32.RECT((int)fx1, y1, (int)fx2, y2);
                             if (isTextOpaque) {
-                                GChar ch = NulToSpace(_cell[cellIndex].Char);
+                                GChar ch = NulToSpace(_cell.CharAt(cellIndex));
                                 int len = ch.WriteTo(tmpCharBuf, 0);
                                 unsafe {
                                     fixed (char* p = tmpCharBuf) {
@@ -1101,7 +462,7 @@ namespace Poderosa.Document {
 
                         if (isTextOpaque) {
                             while (cellIndex < cellEnd) {
-                                GChar ch = NulToSpace(_cell[cellIndex].Char);
+                                GChar ch = NulToSpace(_cell.CharAt(cellIndex));
                                 int len = ch.WriteTo(tmpCharBuf, 0);
                                 unsafe {
                                     fixed (char* p = tmpCharBuf) {
@@ -1124,7 +485,7 @@ namespace Poderosa.Document {
                         char[] tmpCharBuf = GetInternalTemporaryCharBuffer((cellEnd - cellStart) * 2);
                         int bufLen = 0;
                         for (int i = cellStart; i < cellEnd; i++) {
-                            bufLen += NulToSpace(_cell[i].Char).WriteTo(tmpCharBuf, bufLen);
+                            bufLen += NulToSpace(_cell.CharAt(i)).WriteTo(tmpCharBuf, bufLen);
                         }
 
                         if (isBackgroundOpaque) {
@@ -1204,20 +565,20 @@ namespace Poderosa.Document {
                     _displayLength = index + 1;
                 }
 
-                _cell[index].Attr += GAttrFlags.Cursor;
+                _cell.SetFlags(index, GAttrFlags.Cursor);
 
-                if (_cell[index].Char.IsRightHalf) {
-                    if (index > 0 && _cell[index - 1].Char.IsLeftHalf) {
-                        _cell[index - 1].Attr += GAttrFlags.Cursor;
+                if (_cell.CharAt(index).IsRightHalf) {
+                    if (index > 0 && _cell.CharAt(index - 1).IsLeftHalf) {
+                        _cell.SetFlags(index - 1, GAttrFlags.Cursor);
                         UpdateSameToPreviousForCellsChanged(index - 1, index + 1);
                     }
                     else {
                         UpdateSameToPreviousForCellsChanged(index, index + 1);
                     }
                 }
-                else if (_cell[index].Char.IsLeftHalf) {
-                    if (index + 1 < _cell.Length && _cell[index + 1].Char.IsRightHalf) {
-                        _cell[index + 1].Attr += GAttrFlags.Cursor;
+                else if (_cell.CharAt(index).IsLeftHalf) {
+                    if (index + 1 < _cell.Length && _cell.CharAt(index + 1).IsRightHalf) {
+                        _cell.SetFlags(index + 1, GAttrFlags.Cursor);
                         UpdateSameToPreviousForCellsChanged(index, index + 2);
                     }
                     else {
@@ -1239,11 +600,11 @@ namespace Poderosa.Document {
             lock (this) {
                 ExpandBuffer(Math.Max(from + 1, to));
 
-                if (from >= 0 && from < _cell.Length && _cell[from].Char.IsRightHalf) {
+                if (from >= 0 && from < _cell.Length && _cell.CharAt(from).IsRightHalf) {
                     from--;
                 }
 
-                if (to >= 0 && to < _cell.Length && _cell[to].Char.IsRightHalf) {
+                if (to >= 0 && to < _cell.Length && _cell.CharAt(to).IsRightHalf) {
                     to++;
                 }
 
@@ -1256,7 +617,7 @@ namespace Poderosa.Document {
                 }
 
                 for (int i = from; i < to; i++) {
-                    _cell[i].Attr += GAttrFlags.Selected;
+                    _cell.SetFlags(i, GAttrFlags.Selected);
                 }
 
                 UpdateSameToPreviousForCellsChanged(from, to);
@@ -1270,7 +631,7 @@ namespace Poderosa.Document {
         /// <returns>true if the specified cell is a right-half of a wide-width character.</returns>
         public bool IsRightSideOfZenkaku(int index) {
             lock (this) {
-                return (index >= 0 && index < _cell.Length) ? _cell[index].Char.IsRightHalf : false;
+                return (index >= 0 && index < _cell.Length) ? _cell.CharAt(index).IsRightHalf : false;
             }
         }
 
@@ -1320,7 +681,7 @@ namespace Poderosa.Document {
 
             // determine the length of contens
             int lastNonNulIndex = _displayLength - 1;
-            while (lastNonNulIndex >= 0 && _cell[lastNonNulIndex].Char.CodePoint == 0) {
+            while (lastNonNulIndex >= 0 && _cell.CodePointAt(lastNonNulIndex) == 0) {
                 lastNonNulIndex--;
             }
 
@@ -1330,7 +691,7 @@ namespace Poderosa.Document {
             char[] temp = GetInternalTemporaryBufferForCopy();
             int tempIndex = 0;
             for (int i = start; i < end; i++) {
-                GChar ch = _cell[i].Char;
+                GChar ch = _cell.CharAt(i);
                 if (ch.IsRightHalf) {
                     continue;
                 }
@@ -1362,14 +723,15 @@ namespace Poderosa.Document {
         /// <param name="dec"></param>
         /// <returns></returns>
         public static GLine CreateSimpleGLine(string text, TextDecoration dec) {
-            GCell[] buff = new GCell[text.Length * 2];
+            int columns = text.Length * 2;
+            CompactGCellArray cells = new CompactGCellArray(columns, false);
             GColor24[] colorBuff = null;
             int offset = 0;
             GAttr attr = dec.Attr;
             GColor24 colors = dec.Color24;
 
             if (attr.Uses24bitColor) {
-                colorBuff = new GColor24[buff.Length];
+                colorBuff = new GColor24[columns];
             }
 
             UnicodeCharConverter conv = new UnicodeCharConverter(true);
@@ -1381,10 +743,7 @@ namespace Poderosa.Document {
                 }
 
                 GChar gchar = new GChar(unicodeChar);
-                buff[offset].Set(gchar, attr);
-                if (colorBuff != null) {
-                    colorBuff[offset] = colors;
-                }
+                cells.Set(offset, gchar, attr, colors);
 
                 if (offset == 0) {
                     // next cell has "SameToPrevious" flag
@@ -1393,15 +752,12 @@ namespace Poderosa.Document {
                 offset++;
 
                 if (gchar.IsWideWidth) {
-                    buff[offset].Set(gchar + GCharFlags.RightHalf, attr);
-                    if (colorBuff != null) {
-                        colorBuff[offset] = colors;
-                    }
+                    cells.Set(offset, gchar + GCharFlags.RightHalf, attr, colors);
                     offset++;
                 }
             }
 
-            return new GLine(buff, null, offset, EOLType.CRLF);
+            return new GLine(cells, offset, EOLType.CRLF);
         }
     }
 
@@ -1418,8 +774,7 @@ namespace Poderosa.Document {
         //  GAttrFlags.SameToPrevious of each cell is not updated during the manipulation.
         //  The flag will be updated in Export(). 
 
-        private GCell[] _cell = new GCell[1];
-        private GColor24[] _color24 = new GColor24[1];  // always non-null
+        private readonly SimpleGCellArray _cell = new SimpleGCellArray(1);
         private int _caretColumn = 0;
         private EOLType _eolType = EOLType.Continue;
 
@@ -1469,22 +824,7 @@ namespace Poderosa.Document {
         /// </summary>
         /// <param name="length">length of the internal buffer</param>
         public void Reset(int length) {
-            if (_cell == null || length != _cell.Length) {
-                _cell = new GCell[length];
-            }
-
-            for (int i = 0; i < _cell.Length; i++) {
-                _cell[i].Set(GChar.ASCII_NUL, GAttr.Default);
-            }
-
-            if (_color24 == null || length != _color24.Length) {
-                _color24 = new GColor24[length];
-            }
-
-            for (int i = 0; i < _color24.Length; i++) {
-                _color24[i] = new GColor24();
-            }
-
+            _cell.Clear(length);
             _caretColumn = 0;
             _eolType = EOLType.Continue;
         }
@@ -1502,7 +842,7 @@ namespace Poderosa.Document {
                 Reset(80);
             }
             else {
-                line.DuplicateBuffers(_cell, _color24, out _cell, out _color24);
+                line.ResetGCellArray(_cell);
                 _eolType = line.EOLType;
             }
             this.CaretColumn = caretColumn;  // buffer may be expanded
@@ -1513,19 +853,7 @@ namespace Poderosa.Document {
         /// </summary>
         /// <param name="length">minimum buffer size.</param>
         public void ExpandBuffer(int length) {
-            if (length > _cell.Length) {
-                GCell[] oldBuff = _cell;
-                GCell[] newBuff = new GCell[length];
-                oldBuff.CopyTo(newBuff);
-                newBuff.Fill(oldBuff.Length, newBuff.Length, GChar.ASCII_NUL, GAttr.Default);
-                _cell = newBuff;
-            }
-
-            if (length > _color24.Length) {
-                GColor24[] newColors = new GColor24[length];
-                _color24.CopyTo(newColors);
-                _color24 = newColors;
-            }
+            _cell.Expand(length);
         }
 
         /// <summary>
@@ -1538,23 +866,21 @@ namespace Poderosa.Document {
             GAttr newAttr = dec.Attr;
             GColor24 newColor = dec.Color24;
 
-            if (newChar.IsCJK) {
+            if (ch.IsCJK) {
                 newAttr += GAttrFlags.UseCjkFont;
             }
 
             FixLeftHalfOfWideWidthCharacter(_caretColumn - 1);
 
             if (_caretColumn >= 0 && _caretColumn < _cell.Length) {
-                _cell[_caretColumn].Set(newChar, newAttr);
-                _color24[_caretColumn] = newColor;
+                _cell.Set(_caretColumn, newChar, newAttr, newColor);
             }
 
             _caretColumn++;
 
             if (newChar.IsWideWidth) {
                 if (_caretColumn >= 0 && _caretColumn < _cell.Length) {
-                    _cell[_caretColumn].Set(newChar + GCharFlags.RightHalf, newAttr);
-                    _color24[_caretColumn] = newColor;
+                    _cell.Set(_caretColumn, newChar + GCharFlags.RightHalf, newAttr, newColor);
                 }
                 _caretColumn++;
             }
@@ -1572,8 +898,8 @@ namespace Poderosa.Document {
         /// <param name="index"></param>
         private void FixLeftHalfOfWideWidthCharacter(int index) {
             if (index >= 0 && index < _cell.Length) {
-                if (_cell[index].Char.IsLeftHalf) {
-                    _cell[index].SetNul();
+                if (_cell.CharAt(index).IsLeftHalf) {
+                    _cell.SetNul(index);
                 }
             }
         }
@@ -1588,8 +914,8 @@ namespace Poderosa.Document {
         /// <param name="index"></param>
         private void FixRightHalfOfWideWidthCharacter(int index) {
             if (index >= 0 && index < _cell.Length) {
-                if (_cell[index].Char.IsRightHalf) {
-                    _cell[index].SetNul();
+                if (_cell.CharAt(index).IsRightHalf) {
+                    _cell.SetNul(index);
                 }
             }
         }
@@ -1623,8 +949,7 @@ namespace Poderosa.Document {
 
             for (int i = from; i < to; i++) {
                 // Note: uses ASCII_NUL instead of ASCII_SPACE for detecting correct length of the content
-                _cell[i].Set(GChar.ASCII_NUL, fillAttr);
-                _color24[i] = fillColor;
+                _cell.Set(i, GChar.ASCII_NUL, fillAttr, fillColor);
             }
 
             FixRightHalfOfWideWidthCharacter(to);
@@ -1647,16 +972,14 @@ namespace Poderosa.Document {
             int dstIndex = (start >= 0) ? start : 0;
             int srcIndex = dstIndex + count;
             while (dstIndex < _cell.Length && srcIndex < _cell.Length) {
-                _cell[dstIndex] = _cell[srcIndex];
-                _color24[dstIndex] = _color24[srcIndex];
+                _cell.Copy(srcIndex, dstIndex);
                 dstIndex++;
                 srcIndex++;
             }
 
             while (dstIndex < _cell.Length) {
                 // Note: uses ASCII_NUL instead of ASCII_SPACE for detecting correct length of the content
-                _cell[dstIndex].Set(GChar.ASCII_NUL, fillAttr);
-                _color24[dstIndex] = fillColor;
+                _cell.Set(dstIndex, GChar.ASCII_NUL, fillAttr, fillColor);
                 dstIndex++;
             }
 
@@ -1682,15 +1005,13 @@ namespace Poderosa.Document {
             int dstIndex = _cell.Length - 1;
             int srcIndex = dstIndex - count;
             while (srcIndex >= limit) {
-                _cell[dstIndex] = _cell[srcIndex];
-                _color24[dstIndex] = _color24[srcIndex];
+                _cell.Copy(srcIndex, dstIndex);
                 dstIndex--;
                 srcIndex--;
             }
 
             while (dstIndex >= limit) {
-                _cell[dstIndex].Set(GChar.ASCII_NUL, fillAttr);
-                _color24[dstIndex] = fillColor;
+                _cell.Set(dstIndex, GChar.ASCII_NUL, fillAttr, fillColor);
                 dstIndex--;
             }
 
@@ -1704,15 +1025,10 @@ namespace Poderosa.Document {
         /// </summary>
         /// <returns>new <see cref="GLine"/> instance</returns>
         public GLine Export() {
-            bool uses24bitColor;
             int displayLength;
-            PrepareExport(out uses24bitColor, out displayLength);
+            PrepareExport(out displayLength);
 
-            GLine line = new GLine(
-                            (GCell[])_cell.Clone(),
-                            uses24bitColor ? (GColor24[])_color24.Clone() : null,
-                            displayLength,
-                            _eolType);
+            GLine line = new GLine(new CompactGCellArray(_cell), displayLength, _eolType);
             return line;
         }
 
@@ -1721,42 +1037,50 @@ namespace Poderosa.Document {
         /// </summary>
         /// <param name="line"><see cref="GLine"/> to export to</param>
         public void ExportTo(GLine line) {
-            bool uses24bitColor;
             int displayLength;
-            PrepareExport(out uses24bitColor, out displayLength);
+            PrepareExport(out displayLength);
 
-            line.UpdateContent(_cell, uses24bitColor ? _color24 : null, displayLength, _eolType);
+            line.UpdateContent(_cell, displayLength, _eolType);
         }
 
         /// <summary>
         /// Prepare export.
         /// </summary>
-        /// <param name="uses24bitColor">whether 24 bit colors are used</param>
         /// <param name="displayLength">displayLength of the <see cref="GLine"/></param>
-        private void PrepareExport(out bool uses24bitColor, out int displayLength) {
+        private void PrepareExport(out int displayLength) {
             bool tempUses24bitColor = false;
             int lastCharIndex = -1;
             for (int i = 0; i < _cell.Length; i++) {
-                tempUses24bitColor |= _cell[i].Attr.Uses24bitColor;
-                if (!_cell[i].Attr.IsDefault || _cell[i].Char.CodePoint != 0u) {
+                var curAttr = _cell.AttrAt(i);
+                var curChar = _cell.CharAt(i);
+                tempUses24bitColor |= curAttr.Uses24bitColor;
+                if (!curAttr.IsDefault || curChar.CodePoint != 0u) {
                     lastCharIndex = i;
                 }
             }
 
+            // update "IsColor24Used"
+            _cell.IsColor24Used = tempUses24bitColor;
+
             // update "SameToPrevious" flags
 
-            _cell[0].Attr -= GAttrFlags.SameToPrevious;
+            _cell.ClearFlags(0, GAttrFlags.SameToPrevious);
 
+            var prevAttr = _cell.AttrAt(0);
+            var prevColor24 = _cell.Color24At(0);
             for (int i = 1; i < _cell.Length; i++) {
-                if (_cell[i - 1].Attr == _cell[i].Attr && (_color24 == null || _color24[i - 1] == _color24[i])) {
-                    _cell[i].Attr += GAttrFlags.SameToPrevious;
+                var curAttr = _cell.AttrAt(i);
+                var curColor24 = _cell.Color24At(i);
+                if (prevAttr == curAttr && prevColor24 == curColor24) {
+                    _cell.SetFlags(i, GAttrFlags.SameToPrevious);
                 }
                 else {
-                    _cell[i].Attr -= GAttrFlags.SameToPrevious;
+                    _cell.ClearFlags(i, GAttrFlags.SameToPrevious);
                 }
+                prevAttr = curAttr;
+                prevColor24 = curColor24;
             }
 
-            uses24bitColor = tempUses24bitColor;
             displayLength = lastCharIndex + 1;
         }
     }
