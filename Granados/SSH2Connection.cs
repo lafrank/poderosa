@@ -29,7 +29,7 @@ namespace Granados.SSH2 {
     /// <summary>
     /// SSH2 connection
     /// </summary>
-    internal class SSH2Connection : ISSHConnection, IDisposable {
+    public class SSH2Connection : ISSHConnection, IDisposable {
         private readonly IGranadosSocket _socket;
         private readonly ISSHConnectionEventHandler _eventHandler;
         private readonly SocketStatusReader _socketStatusReader;
@@ -52,8 +52,9 @@ namespace Granados.SSH2 {
 
         //server info
         private readonly SSH2ConnectionInfo _connectionInfo;
+		    public SSH2ConnectionInfo ConnectionInfo { get { return _connectionInfo; } }
 
-        private byte[] _sessionID = null;
+				private byte[] _sessionID = null;
         private AuthenticationStatus _authenticationStatus = AuthenticationStatus.NotStarted;
 
         /// <summary>

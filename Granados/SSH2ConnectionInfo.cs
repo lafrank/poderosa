@@ -16,7 +16,7 @@ namespace Granados.SSH2 {
     /// <summary>
     /// A class retains miscellaneous informations about a SSH2 connection.
     /// </summary>
-    internal class SSH2ConnectionInfo {
+    public class SSH2ConnectionInfo {
 
         /// <summary>
         /// Constructor

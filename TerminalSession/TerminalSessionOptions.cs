@@ -20,7 +20,7 @@ using System.Text;
 using Poderosa.Preferences;
 
 namespace Poderosa.Sessions {
-    internal class TerminalSessionOptions : SnapshotAwarePreferenceBase, ITerminalSessionOptions {
+    public class TerminalSessionOptions : SnapshotAwarePreferenceBase, ITerminalSessionOptions {
         private IBoolPreferenceItem _askCloseOnExit;
         private IIntPreferenceItem _terminalEstablishTimeout;
         private IStringPreferenceItem _telnetSSHLoginDialogUISupportTypeName;

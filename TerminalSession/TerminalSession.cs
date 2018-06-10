@@ -47,7 +47,7 @@ namespace Poderosa.Sessions {
     }
 
     //接続に対して関連付けるデータ
-    internal class TerminalSession : ITerminalSession, IAbstractTerminalHost, ITerminalControlHost {
+    public class TerminalSession : ITerminalSession, IAbstractTerminalHost, ITerminalControlHost {
         private delegate void HostCauseCloseDelagate(string msg);
 
         private ISessionHost _sessionHost;

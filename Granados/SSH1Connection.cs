@@ -30,7 +30,7 @@ namespace Granados.SSH1 {
     /// <summary>
     /// SSH1 connection
     /// </summary>
-    internal class SSH1Connection : ISSHConnection, IDisposable {
+    public class SSH1Connection : ISSHConnection, IDisposable {
 
         private readonly IGranadosSocket _socket;
         private readonly ISSHConnectionEventHandler _eventHandler;
@@ -53,8 +53,9 @@ namespace Granados.SSH1 {
         private readonly Lazy<SSH1X11Forwarding> _x11Forwarding;
 
         private readonly SSH1ConnectionInfo _connectionInfo;
+		    public SSH1ConnectionInfo ConnectionInfo { get { return _connectionInfo; } }
 
-        private byte[] _sessionID = null;
+		    private byte[] _sessionID = null;
         private AuthenticationStatus _authenticationStatus = AuthenticationStatus.NotStarted;
         private int _remotePortForwardCount = 0;
 

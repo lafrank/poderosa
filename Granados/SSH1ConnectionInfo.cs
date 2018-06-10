@@ -17,7 +17,7 @@ namespace Granados.SSH1 {
     /// SSH1 protocol flags
     /// </summary>
     [Flags]
-    internal enum SSH1ProtocolFlags : uint {
+    public enum SSH1ProtocolFlags : uint {
         SSH_PROTOFLAG_SCREEN_NUMBER = 1,
         SSH_PROTOFLAG_HOST_IN_FWD_OPEN = 2,
     }
@@ -25,7 +25,7 @@ namespace Granados.SSH1 {
     /// <summary>
     /// A class retains miscellaneous informations about a SSH1 connection.
     /// </summary>
-    internal class SSH1ConnectionInfo {
+    public class SSH1ConnectionInfo {
 
         /// <summary>
         /// Constructor

@@ -27,7 +27,7 @@ using Granados.SSH2;
 using Granados.KeyboardInteractive;
 
 namespace Poderosa.Protocols {
-    internal class PlainPoderosaSocket : IPoderosaSocket {
+    public class PlainPoderosaSocket : IPoderosaSocket {
         private IByteAsyncInputStream _callback;
         private Socket _socket;
         private byte[] _buf;
@@ -157,7 +157,7 @@ namespace Poderosa.Protocols {
     }
 
     //送信したものをそのまま戻す
-    internal class LoopbackSocket : IPoderosaSocket {
+    public class LoopbackSocket : IPoderosaSocket {
         private IByteAsyncInputStream _receiver;
 
         public void RepeatAsyncRead(IByteAsyncInputStream receiver) {
@@ -186,7 +186,7 @@ namespace Poderosa.Protocols {
     }
 
 
-    internal class ConnectionStats {
+    public class ConnectionStats {
         private int _sentDataAmount;
         private int _receivedDataAmount;
 
@@ -210,7 +210,7 @@ namespace Poderosa.Protocols {
         }
     }
 
-    internal abstract class TerminalConnection : ITerminalConnection {
+    public abstract class TerminalConnection : ITerminalConnection {
         protected ITerminalParameter _destination;
         protected ConnectionStats _stats;
         protected ITerminalOutput _terminalOutput; //派生クラスではこれをセットする
@@ -269,7 +269,7 @@ namespace Poderosa.Protocols {
         }
     }
 
-    internal abstract class TCPTerminalConnection : TerminalConnection {
+    public abstract class TCPTerminalConnection : TerminalConnection {
 
         protected TCPTerminalConnection(ITCPParameter p)
             : base((ITerminalParameter)p.GetAdapter(typeof(ITerminalParameter))) {
@@ -277,7 +277,7 @@ namespace Poderosa.Protocols {
     }
 
 
-    internal class SSHTerminalConnection : TCPTerminalConnection {
+    public class SSHTerminalConnection : TCPTerminalConnection {
 
         private readonly SSHSocket _sshSocket;
         private readonly ISSHLoginParameter _sshLoginParameter;
@@ -372,7 +372,7 @@ namespace Poderosa.Protocols {
 
     }
 
-    internal class TelnetReceiver : IByteAsyncInputStream {
+    public class TelnetReceiver : IByteAsyncInputStream {
         private IByteAsyncInputStream _callback;
         private TelnetNegotiator _negotiator;
         private TelnetTerminalConnection _parent;
@@ -440,7 +440,7 @@ namespace Poderosa.Protocols {
         }
     }
 
-    internal class TelnetSocket : IPoderosaSocket, ITerminalOutput {
+    public class TelnetSocket : IPoderosaSocket, ITerminalOutput {
         private IPoderosaSocket _socket;
         private TelnetReceiver _callback;
         private TelnetTerminalConnection _parent;
@@ -545,7 +545,7 @@ namespace Poderosa.Protocols {
         }
     }
 
-    internal class TelnetTerminalConnection : TCPTerminalConnection {
+    public class TelnetTerminalConnection : TCPTerminalConnection {
         private TelnetReceiver _telnetReceiver;
         private TelnetSocket _telnetSocket;
         private IPoderosaSocket _rawSocket;

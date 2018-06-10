@@ -29,7 +29,7 @@ using System.Threading.Tasks;
 
 namespace Poderosa.Protocols {
     //SSHの入出力系
-    internal abstract class SSHConnectionEventReceiverBase : ISSHConnectionEventHandler {
+    public abstract class SSHConnectionEventReceiverBase : ISSHConnectionEventHandler {
         protected SSHTerminalConnection _parent;
         protected ISSHConnection _connection;
         protected IByteAsyncInputStream _callback;
@@ -121,7 +121,7 @@ namespace Poderosa.Protocols {
         }
     }
 
-    internal class SSHSocket
+    public class SSHSocket
         : SSHConnectionEventReceiverBase,
           IPoderosaSocket, ITerminalOutput, IKeyboardInteractiveAuthenticationHandler {
 
@@ -285,7 +285,7 @@ namespace Poderosa.Protocols {
         #endregion
     }
 
-    internal class SSHChannelHandler : ISSHChannelEventHandler {
+    public class SSHChannelHandler : ISSHChannelEventHandler {
 
         private readonly ISSHChannel _channelOperator;
         private readonly Action _onNormalTermination;
@@ -380,10 +380,10 @@ namespace Poderosa.Protocols {
         }
     }
 
-    /// <summary>
-    /// Dummy channel object during keyboard-interactive authentication.
-    /// </summary>
-    internal class NullSSHChannel : ISSHChannel {
+	/// <summary>
+	/// Dummy channel object during keyboard-interactive authentication.
+	/// </summary>
+	      public class NullSSHChannel : ISSHChannel {
 
         public uint LocalChannel {
             get {
@@ -448,10 +448,10 @@ namespace Poderosa.Protocols {
         }
     }
 
-    /// <summary>
-    /// Keyboard-interactive authentication support for <see cref="SSHSocket"/>.
-    /// </summary>
-    internal class KeyboardInteractiveAuthHanlder {
+	/// <summary>
+	/// Keyboard-interactive authentication support for <see cref="SSHSocket"/>.
+	/// </summary>
+	      public class KeyboardInteractiveAuthHanlder {
         private bool _echoing = true;
         private readonly MemoryStream _inputBuffer = new MemoryStream();
         private readonly object _inputSync = new object();
