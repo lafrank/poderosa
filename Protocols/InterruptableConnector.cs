@@ -24,7 +24,7 @@ namespace Poderosa.Protocols {
     /// <summary>
     /// ソケットを開き、接続を確立する手順をしつつタイムアウトや途中で中止することもできるための機能
     /// </summary>
-    internal abstract class InterruptableConnector : IInterruptable {
+    public abstract class InterruptableConnector : IInterruptable {
         private IPAddressList _addressSet;
         protected IInterruptableConnectorClient _client;
         protected ITCPParameter _tcpDestination;

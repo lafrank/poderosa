@@ -28,7 +28,7 @@ using Granados.SSH;
 
 namespace Poderosa.Protocols {
 
-    internal class SSHConnector : InterruptableConnector {
+    public class SSHConnector : InterruptableConnector {
 
         private ISSHLoginParameter _destination;
         private HostKeyVerifierBridge _keycheck;

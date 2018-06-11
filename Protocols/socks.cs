@@ -21,7 +21,7 @@ using System.Net;
 using System.Net.Sockets;
 
 namespace Poderosa.Protocols {
-    internal class Socks {
+    public class Socks {
         private int _version;
         private string _serverName;
         private short _serverPort;

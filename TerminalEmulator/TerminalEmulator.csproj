@@ -56,6 +56,12 @@
     <NoWarn>1591</NoWarn>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>Poderosa.TerminalEmulator.pfx</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
@@ -69,9 +75,7 @@
     <Compile Include="CharDecoder.cs" />
     <Compile Include="CommandResultEx.cs" />
     <Compile Include="CommandResultPopup.cs" />
-    <Compile Include="CommandResultPopupSession.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="CommandResultPopupSession.cs" />
     <Compile Include="Encoding.cs" />
     <Compile Include="GEnv.cs" />
     <Compile Include="IntelliSense.cs" />
@@ -132,6 +136,9 @@
     <EmbeddedResource Include="strings_ja.resx">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <EmbeddedResource Include="TerminalControl.resx">
+      <DependentUpon>TerminalControl.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="WarningWithDisableOption.resx">
       <SubType>Designer</SubType>
       <DependentUpon>WarningWithDisableOption.cs</DependentUpon>
@@ -172,6 +179,7 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Poderosa.TerminalEmulator.pfx" />
     <None Include="Resources\Bell16x16.png" />
     <None Include="Resources\CommentLog16x16.png" />
     <None Include="Resources\Info16x16.png" />

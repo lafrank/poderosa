@@ -29,7 +29,7 @@ namespace Poderosa.Protocols {
     }
 
     //Extension Point
-    internal class HostKeyVerifierBridge {
+    public class HostKeyVerifierBridge {
         private ISSHHostKeyVerifier2 _verifier;
 
         public bool Vefiry(ISSHHostKeyInformationProvider info) {
