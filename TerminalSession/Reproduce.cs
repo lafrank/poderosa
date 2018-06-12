@@ -25,7 +25,7 @@ using Poderosa.Commands;
 using Poderosa.Terminal;
 
 namespace Poderosa.Sessions {
-    internal class ReproduceCommand : IGeneralCommand {
+    public class ReproduceCommand : IGeneralCommand {
         public string CommandID {
             get {
                 return "org.poderosa.terminalsession.reproduce";

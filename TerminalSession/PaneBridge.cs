@@ -27,7 +27,7 @@ using Poderosa.Forms;
 
 namespace Poderosa.Terminal {
 
-    internal class TerminalViewFactory : IViewFactory {
+    public class TerminalViewFactory : IViewFactory {
         public IPoderosaView CreateNew(IPoderosaForm parent) {
             return new TerminalView(parent, new TerminalControl());
         }
@@ -45,7 +45,7 @@ namespace Poderosa.Terminal {
     }
 
     //TerminalControlにビュー機能を与えるクラス
-    internal class TerminalView : IPoderosaView, IContentReplaceableViewSite, IGeneralViewCommands {
+    public class TerminalView : IPoderosaView, IContentReplaceableViewSite, IGeneralViewCommands {
         private IPoderosaForm _parent;
         private TerminalControl _control;
         private IContentReplaceableView _contentReplaceableView; //包含するやつ
@@ -121,7 +121,7 @@ namespace Poderosa.Terminal {
     }
 
     //TerminalControl to TerminalView
-    internal class PaneBridgeAdapter : ITypedDualDirectionalAdapterFactory<TerminalControl, TerminalView> {
+    public class PaneBridgeAdapter : ITypedDualDirectionalAdapterFactory<TerminalControl, TerminalView> {
 
         public override TerminalView GetAdapter(TerminalControl obj) {
             return ((TerminalView)obj.Tag);

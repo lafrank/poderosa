@@ -25,7 +25,7 @@ using Poderosa.Plugins;
 using System.Text.RegularExpressions;
 
 namespace Poderosa.Executable {
-    internal class Root {
+    public class Root {
         private static IPoderosaApplication _poderosaApplication;
 
         public static void Run(string[] args) {

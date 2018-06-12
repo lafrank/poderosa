@@ -31,7 +31,7 @@ using Poderosa.Serializing;
 
 namespace Poderosa.Sessions {
     [PluginInfo(ID = TerminalSessionsPlugin.PLUGIN_ID, Version = VersionInfo.PODEROSA_VERSION, Author = VersionInfo.PROJECT_NAME, Dependencies = "org.poderosa.core.sessions;org.poderosa.terminalemulator;org.poderosa.protocols")]
-    internal class TerminalSessionsPlugin : PluginBase, ITerminalSessionsService {
+    public class TerminalSessionsPlugin : PluginBase, ITerminalSessionsService {
         public const string PLUGIN_ID = "org.poderosa.terminalsessions";
 
         public const string TERMINAL_CONNECTION_FACTORY_ID = "org.poderosa.termianlsessions.terminalConnectionFactory";
