@@ -152,57 +152,65 @@ namespace Poderosa.Terminal
 		}
 		public void Attach(ITerminalControlHost session)
 		{
-			_session = session;
-			SetContent(session.Terminal.GetDocument());
-
-			_mouseTrackingHandler.Attach(session);
-			_mouseWheelHandler.Attach(session);
-
-			ITerminalEmulatorOptions opt = TerminalEmulatorPlugin.Instance.TerminalEmulatorOptions;
-			_caret.Blink = opt.CaretBlink;
-			_caret.Color = opt.CaretColor;
-			_caret.Style = opt.CaretType;
-			_caret.Reset();
-
-			//KeepAliveタイマ起動は最も遅らせた場合でココ
-			TerminalEmulatorPlugin.Instance.KeepAlive.Refresh(opt.KeepAliveInterval);
-
-			//ASCIIWordBreakTable : 今は共有設定だが、Session固有にデータを持つようにするかもしれない含みを持たせて。
-			ASCIIWordBreakTable table = ASCIIWordBreakTable.Default;
-			table.Reset();
-			foreach (char ch in opt.AdditionalWordElement)
-				table.Set(ch, ASCIIWordBreakTable.LETTER);
-
-			lock (GetDocument())
+			if (InvokeRequired) Invoke(new Action(() => Attach(session)));
+			else
 			{
-				_ignoreValueChangeEvent = true;
-				_session.Terminal.CommitScrollBar(_VScrollBar, false);
-				_ignoreValueChangeEvent = false;
+				_session = session;
+				SetContent(session.Terminal.GetDocument());
 
-				if (!IsConnectionClosed())
+				_mouseTrackingHandler.Attach(session);
+				_mouseWheelHandler.Attach(session);
+
+				ITerminalEmulatorOptions opt = TerminalEmulatorPlugin.Instance.TerminalEmulatorOptions;
+				_caret.Blink = opt.CaretBlink;
+				_caret.Color = opt.CaretColor;
+				_caret.Style = opt.CaretType;
+				_caret.Reset();
+
+				//KeepAliveタイマ起動は最も遅らせた場合でココ
+				TerminalEmulatorPlugin.Instance.KeepAlive.Refresh(opt.KeepAliveInterval);
+
+				//ASCIIWordBreakTable : 今は共有設定だが、Session固有にデータを持つようにするかもしれない含みを持たせて。
+				ASCIIWordBreakTable table = ASCIIWordBreakTable.Default;
+				table.Reset();
+				foreach (char ch in opt.AdditionalWordElement)
+					table.Set(ch, ASCIIWordBreakTable.LETTER);
+
+				lock (GetDocument())
 				{
-					Size ts = CalcTerminalSize(GetRenderProfile());
+					_ignoreValueChangeEvent = true;
+					_session.Terminal.CommitScrollBar(_VScrollBar, false);
+					_ignoreValueChangeEvent = false;
 
-					//TODO ネゴ開始前はここを抑制したい
-					if (ts.Width != GetDocument().TerminalWidth || ts.Height != GetDocument().TerminalHeight)
-						ResizeTerminal(ts.Width, ts.Height);
+					if (!IsConnectionClosed())
+					{
+						Size ts = CalcTerminalSize(GetRenderProfile());
+
+						//TODO ネゴ開始前はここを抑制したい
+						if (ts.Width != GetDocument().TerminalWidth || ts.Height != GetDocument().TerminalHeight)
+							ResizeTerminal(ts.Width, ts.Height);
+					}
 				}
+				Invalidate(true);
 			}
-			Invalidate(true);
 		}
 		public void Detach()
 		{
-			if (DebugOpt.DrawingPerformance)
-				DrawingPerformance.Output();
+			if (InvokeRequired) Invoke(new Action(() => Detach()));
+			else
+			{
+				if (DebugOpt.DrawingPerformance)
+					DrawingPerformance.Output();
 
-			if (_inIMEComposition)
-				ClearIMEComposition();
+				if (_inIMEComposition)
+					ClearIMEComposition();
 
-			_mouseTrackingHandler.Detach();
-			_mouseWheelHandler.Detach();
+				_mouseTrackingHandler.Detach();
+				_mouseWheelHandler.Detach();
 
-			_session = null;
-			SetContent(null);
+				_session = null;
+				SetContent(null);
+			}
 		}
 
 		/// <summary>

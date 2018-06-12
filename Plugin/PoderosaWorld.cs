@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Text;
 
 using Poderosa.Plugins;
+using System.Linq;
 
 namespace Poderosa.Boot
 {
@@ -118,7 +119,13 @@ namespace Poderosa.Boot
 			//Step1 プラグインの構成と初期化
 			_pluginManager.InitializePlugins(_startupContext);
 
-			if (runAsLibrary) return this;
+			if (runAsLibrary)
+			{
+				// Initialize any RootExtension except IGUIMessageLoop extensions
+				var extensionsToInit = _rootExtension.GetExtensions().Cast<IRootExtension>().Where(e => !(e is IGUIMessageLoop)).ToList();
+				extensionsToInit.ForEach(ext => ext.InitializeExtension());
+				return this;
+			}
 
 			//エラーレポート
 			if (!tracer.Document.IsEmpty) ReportBootError(tracer.Document);
